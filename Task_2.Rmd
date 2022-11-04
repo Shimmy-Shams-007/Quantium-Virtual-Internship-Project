@@ -1,0 +1,58 @@
+---
+
+title: "Task_2"
+author: "Shams Reza Sajid"
+date: "2022-11-02"
+mainfont: Roboto
+monofont: Consolas
+output: pdf_document
+
+header-includes:
+  \usepackage{fvextra}
+
+---
+
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(linewidth=80)
+
+```
+
+
+```{r knitr line wrap setup, include=FALSE}
+library(knitr)
+hook_output = knit_hooks$get("output")
+knit_hooks$set(output = function(x, options)
+{
+ # this hook is used only when the linewidth option is not NULL
+ if (!is.null(n <- options$linewidth))
+ {
+ x = knitr:::split_lines(x)
+ # any lines wider than n should be wrapped
+ if (any(nchar(x) > n))
+ x = strwrap(x, width = n)
+ x = paste(x, collapse = "\n")
+ }
+ hook_output(x, options)
+})
+
+```
+
+
+# Solution For Task 2
+
+
+### Load required libraries and datasets
+
+```{r 0. Load libraries, include = FALSE}
+
+library(data.table)
+library(ggplot2)
+library(tidyr)
+
+```
+
+
+

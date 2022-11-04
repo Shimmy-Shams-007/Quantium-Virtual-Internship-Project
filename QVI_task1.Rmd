@@ -1,0 +1,555 @@
+---
+title: "Quantium Virtual Internship - Retail Strategy and Analytics - Task 1"
+author: "Shams Reza Sajid"
+date: "31-10-2022"
+output:
+  pdf_document: default
+---
+
+
+```{r setup, include = FALSE} 
+# Set options for R markdown knitting 
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(linewidth = 80)
+
+```
+
+
+
+```{r knitr line wrap setup, include=FALSE}
+# set up line wrapping in MD knit output
+library(knitr)
+hook_output = knit_hooks$get("output")
+knit_hooks$set(output = function(x, options)
+{
+ # this hook is used only when the linewidth option is not NULL
+ if (!is.null(n <- options$linewidth))
+ {
+ x = knitr:::split_lines(x)
+ # any lines wider than n should be wrapped
+ if (any(nchar(x) > n))
+ x = strwrap(x, width = n)
+ x = paste(x, collapse = "\n")
+ }
+ hook_output(x, options)
+})
+
+
+```
+
+
+# Task 1
+
+## Loading the Libraries
+
+```{r 0 Load Libraries, results ='hide'}
+
+library(data.table)
+
+library(knitr)
+
+library(ggplot2)
+
+library(ggmosaic)
+
+library(readr)
+
+library(readxl)
+
+library (scales)
+
+library (lessR)
+
+library (tidyverse)
+
+library(tinytex)
+
+
+filePath <- ""
+
+transactionData <- data.table(read_excel("QVI_transaction_data.xlsx", sheet = "in"))
+
+customerData <- data.table(fread (paste0 (filePath, "QVI_purchase_behaviour.csv")))
+
+str (transactionData)
+
+```
+
+## Ensuring Data is in Correct Format
+
+```{r Examining Transaction Data, results = 'hide'}
+
+### Examine Transaction Data
+
+str(transactionData)
+
+```
+
+We can see that the date column is in an integer format. Let's change this to a date format.
+
+```{r Convert DATE to Date format}
+#### Convert DATE Column to a date format
+#### A quick search online tells us that the CSV and Excel Integar dates begins on 30 Dec 1899
+transactionData$DATE = as.Date(transactionData$DATE, origin = "1899-12-30")
+
+#### Verifying The Transformed Date Column
+str(transactionData)
+```
+
+
+Checking to see if we are looking at the right product
+
+``` {r Summary of PROD_NAME}
+#### Examining PROD_NAME
+head(transactionData$PROD_NAME)
+```
+
+
+Determining if all chips are potato chips 
+
+```{r Further Examine PROD_NAME}
+#### Examine the words in PROD_NAME to see if there are any incorrect entries
+productWords = data.table ( unlist (strsplit (unique (transactionData [, PROD_NAME]),"")))
+setnames(productWords, 'words')
+
+#### Removing any entries that are not strictly alphabetical characters using grepl
+productWords = productWords [!grepl ('[^[:alpha:]]', productWords$words )]
+print(productWords)
+
+### Sorting by word frequency
+head (sort(table(productWords$words), decreasing = T), 30)
+
+
+```
+
+
+There are salsa products in the dataset but we are only interested in the chips category, so let's remove these.
+
+```{r}
+#### Remove salsa products
+
+transactionData[, SALSA := grepl("salsa", tolower(PROD_NAME))]
+transactionData <- transactionData[SALSA == FALSE, ][, SALSA := NULL]
+
+```
+
+
+Summarizing the data to check for nulls and possible outliers
+
+
+```{r Initialize Summary}
+#### Summarize the data to check for nulls and possible outliers
+
+summary (transactionData)
+
+
+#### Filtering the data set to examine the transactions in question
+
+sort (table(transactionData$PROD_QTY), decreasing = T)
+
+print(transactionData[PROD_QTY > 226201])
+
+```
+
+
+There are two transactions where 200 packets of chips are bought in one transaction and both of these transactions were by the same customer.
+
+
+```{r Investigating the Outlier}
+#### Let's see if the customer has had other transactions
+
+sort (table(transactionData$PROD_QTY), decreasing = T)
+
+
+# Checking the number of PROD_QNT = 200 transactions
+print (transactionData[PROD_QTY == 200])
+
+
+# Checking to see if the cx had other transactions based on loyalty card number
+print (transactionData[LYLTY_CARD_NBR == 226000])
+
+
+# Removing the cx 
+transactionData = transactionData[LYLTY_CARD_NBR != 226000]
+
+```
+
+
+Confirming that there are no missing data 
+
+
+```{r Rexamining Transaction Data}
+
+summary (transactionData)
+
+missingData = transactionData[apply(transactionData, 1, function(x) any (!nzchar(x)) || any(is.na(x))),]
+
+print (missingData)
+```
+
+
+That's better. Now, let's look at the number of transaction lines over time to see if there are any obvious data issues such as missing dates.
+
+
+```{r}
+#### Counting the number of transactions by date
+numDates = length (unique (transactionData$DATE))
+print (numDates)
+```
+
+
+There's only 364 rows, meaning only 364 dates which indicates a missing date. Let's create a sequence of dates from 1 Jul 2018 to 30 Jun 2019 and use this to create a chart of number of transactions over time to find the missing date.
+
+
+```{r fig.align='center'}
+
+#### Create a sequence of dates and join this the count of transactions by date
+
+partialYear = as.Date(unique(transactionData$DATE), origin = "1899-12-30")
+fullYear = seq(as.Date("2018/7/1"), by = "day", length.out = 365)
+
+missingDate = fullYear[!(fullYear %in% partialYear)]
+
+print (missingDate)
+
+
+transactionsByDay = data.table (table (c (as.Date(transactionData$DATE, origin = "1899-12-30"), missingDate)))
+setnames(transactionsByDay, c('day', 'count'))
+transactionsByDay$day = as.Date(transactionsByDay$day)
+
+str (transactionsByDay)
+
+
+#### Setting plot themes to format graphs 
+theme_set(theme_bw())
+theme_update(plot.title = element_text(hjust = 0.5))
+
+
+#### Plot Transactions over time 
+ggplot (transactionsByDay, aes(x = transactionsByDay$day, y = transactionsByDay$count)) + 
+  geom_line() + 
+  labs (x = "Day", y = "Number of Transactions", title = "Transactions Over Time") + scale_x_date(breaks = "1 month") + 
+  
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) + 
+  
+  #### Filtering to December and look individual days ( remove this to zoom out )
+  coord_cartesian(xlim = c(as.Date('2018-12-01'),as.Date('2019-01-01')), ylim=c(0, 950))
+
+
+
+```
+
+
+We can see that the increase in sales occurs in the lead-up to Christmas and that there are zero sales on Christmas day itself. This is due to shops being closed on Christmas day. Now that we are satisfied that the data no longer has outliers, we can move on to creating other features such as brand of chips or pack size from PROD_NAME. We will start with pack size.
+
+
+``` {r Create Pack Size}
+
+#### Pack Size
+#### We can work this out by taking the digits that are in PROD_NAME
+transactionData [, PACK_SIZE := parse_number (PROD_NAME)]
+
+#### Always Check Output
+#### Let's check if the pack sizes look sensible
+transactionData [, .N, PACK_SIZE][order (PACK_SIZE)]
+
+```
+
+
+The largest size is 380g and the smallest size is 70g - seems sensible!
+
+
+```{r}
+
+#### Let's plot a histogram of PACK_SIZE since we know that it is a categorical variable and not a continuous variable even though it is numeric. 
+hist(transactionData$PACK_SIZE, 
+     main = "Chip Pack Size Frequencies",
+      xlab = "Pack Size (g)",
+      ylab = "Frequency",
+      col = "darkred")
+```
+
+
+
+Pack sizes created look reasonable. Now to create brands, we can use the first word in PROD_NAME to work out the brand name...
+
+
+```{r Create Brand Names}
+
+#### Create Brand Names
+transactionData [, BRAND := tstrsplit(PROD_NAME, " ", fixed = TRUE)[1]]
+print (transactionData[, .N, BRAND] [order (BRAND)])
+
+```
+
+
+```{r Clean Brand Names}
+
+#### Clean Brand Names
+transactionData [ BRAND == "Red", BRAND := "RRD" ]
+transactionData [ BRAND == "Infzns", BRAND := "Infuzions" ]
+transactionData [ BRAND == "Snbts", BRAND := "Sunbites" ]
+transactionData [ BRAND == "Smith", BRAND := "Smiths" ]
+transactionData [ BRAND == "Dorito", BRAND := "Doritos" ]
+transactionData [ BRAND == "Grain", BRAND := "GrnWves" ]
+transactionData [ BRAND == "WW", BRAND := "Woolworths" ]
+
+
+
+#### Confirming if the edits were successfull 
+print (transactionData [, .N, BRAND] [order(BRAND)])
+
+```
+
+
+Now that we are happy with the transaction dataset, let's have a look at the customer dataset.
+
+#### Examining Customer Data
+``` {r Examining Cx Data}
+
+
+str(customerData)
+
+
+# Get Data Summary
+summary (customerData)
+
+print (customerData [, .N, LIFESTAGE] [order(N, decreasing = TRUE)])
+print (customerData [, .N, PREMIUM_CUSTOMER] [order(N, decreasing = TRUE)])
+
+#### Checking for any missing entries 
+print (customerData [is.null(PREMIUM_CUSTOMER), .N])
+
+```
+
+
+``` {r}
+
+#### Merge Transaction Data to Customer Data
+data = merge(transactionData, customerData, all.x = TRUE)
+
+```
+
+
+
+As the number of rows in `data` is the same as that of `transactionData`, we can be sure that no duplicates were created. This is because we created `data` by setting `all.x = TRUE` (in other words, a left join) which means take all the rows in `transactionData` and find rows with matching values in shared columns and then joining the details in these rows to the `x` or the first mentioned table.
+
+Let's also check if some customers were not matched on by checking for nulls.
+
+```{r Check for missing customer details}
+
+#### Checking for missing cx data 
+print (data [is.null(PREMIUM_CUSTOMER), .N])
+
+```
+
+
+Great, there are no nulls! So all our customers in the transaction data has been accounted for in the customer dataset. Note that if you are continuing with Task 2, you may want to retain this dataset which you can write out as a csv
+
+
+```{r Code to save dataset as a csv}
+
+fwrite(data, paste0(filePath,"QVI_data.csv"))
+
+```
+
+
+Data exploration is now complete!
+
+
+# Data Analysis 
+
+Now that the data is ready for analysis, we can define some metrics of interest to the client:
+
+  - Who spends the most on chips (total sales), describing customers by lifestage and how premium their general purchasing behaviour is
+  - How many customers are in each segment
+  - How many chips are bought per customer by segment
+  - What's the average chip price by customer segment We could also ask our data team for more information. Examples are:
+  - The customer's total spend over the period and total spend for each transaction to understand what proportion of their grocery spend is on chips
+  - Proportion of customers in each customer segment overall to compare against the mix of customers who purchase chips. 
+
+Let's start with calculating total sales by LIFESTAGE and PREMIUM_CUSTOMER and plotting the split by these segments to describe which customer segment contribute most to chip sales.
+
+
+```{r fig.width = 10, fig.align = "center"}
+
+
+#### Total sales by LIFESTAGE and PREMIUM_CUSTOMER
+sales <- data[,list(SALES=sum(TOT_SALES), packets=sum(PROD_QTY)), by=c('LIFESTAGE', 'PREMIUM_CUSTOMER')]
+
+
+#### Creating a plot
+p = ggplot(data = sales) + 
+  geom_mosaic(aes (weight = SALES, x = product(PREMIUM_CUSTOMER, LIFESTAGE), fill = PREMIUM_CUSTOMER)) + 
+  labs (x = "Lifestage", y = "Premium Customer Flag", title = "Proportion of sales") + 
+  theme (axis.text.x = element_text(angle = 90, vjust = 0.5))
+
+
+#### Plot and label with proportion of sales
+p + geom_text(data = ggplot_build (p)$data[[1]], aes(x = (xmin + xmax)/2, y = (ymin + ymax)/2, 
+                                label = as.character(paste(round(.wt/sum(.wt),3)*100, '%'))))
+
+```
+
+
+Sales are coming mainly from Budget - older families, Mainstream - young singles/couples, and Mainstream - retirees
+Let's see if the higher sales are due to there being more customers who buy chips.
+
+
+```{r fig.width = 10, fig.align = "center"}
+
+#### Number of customers by LIFESTAGE and PREMIUM_CUSTOMER
+
+cxBySegment = customerData [, .N, by = c('LIFESTAGE', 'PREMIUM_CUSTOMER')]
+
+
+#### Creating a plot
+p = ggplot(data = cxBySegment) + 
+  geom_mosaic(aes (weight = N, x = product(PREMIUM_CUSTOMER, LIFESTAGE), fill = PREMIUM_CUSTOMER)) + 
+  labs (x = "Lifestage", y = "Premium Customer Flag", title = "Customer Segment Breakdown") + 
+  theme (axis.text.x = element_text(angle = 90, vjust = 0.5))
+
+
+#### Plot and label with proportion of sales
+p + geom_text(data = ggplot_build (p)$data[[1]], aes(x = (xmin + xmax)/2, y = (ymin + ymax)/2, 
+                                label = as.character(paste(round(.wt/sum(.wt),3)*100, '%'))))
+
+
+#### Packets bought per customer by LIFESTAGE and PREMIUM_CUSTOMER
+packetsPerCxBySegment = cxBySegment [, packsPerCx := sales$packets/N]
+
+ggplot (packetsPerCxBySegment, aes (fill = PREMIUM_CUSTOMER, y = LIFESTAGE, x = packsPerCx)) + 
+  geom_bar(position = "dodge", stat = "identity") + 
+    ggtitle("Packets/Customer by LIFESTAGE and PREMIUM_CUSTOMER")
+
+```
+
+
+
+There are more Mainstream - young singles/couples and Mainstream - retirees who buy chips. This contributes to there being more sales to these customer segments but this is not a major driver for the Budget - Older families segment. Higher sales may also be driven by more units of chips being bought per customer. Let's have a look at this next.
+
+
+```{r fig.width = 10, fig.align = "center"}
+
+#### Average Price of units per customer by LIFESTAGE and PREMIUM_CUSTOMER
+
+sales [, avg_chip_price := SALES / packets]
+print(sales)
+
+ggplot(sales, aes(fill=PREMIUM_CUSTOMER, y=LIFESTAGE, x= avg_chip_price)) +
+    geom_bar(position="dodge", stat="identity") +
+        ggtitle("Average Chip Packet Price by LIFESTAGE and PREMIUM_CUSTOMER")
+
+```
+
+
+
+
+```{r fig.width = 10, fig.align = "center"}
+
+#### Perform an independent t-test between mainstream vs premium and budget midage and young singles and couples
+
+data = data[, avg_Chip_Packet_Price := TOT_SALES/PROD_QTY]
+
+mainstream = data [(LIFESTAGE == 'YOUNG SINGLES/COUPLES' | LIFESTAGE == 'MIDAGE SINGLES/COUPLES') & 
+                    PREMIUM_CUSTOMER == 'Mainstream', avg_Chip_Packet_Price]
+
+
+premium_Budget = data [(LIFESTAGE == 'YOUNG SINGLES/COUPLES' | LIFESTAGE == 'MIDAGE SINGLES/COUPLES') & 
+                      (PREMIUM_CUSTOMER == 'Budget' | PREMIUM_CUSTOMER == 'Premium'), avg_Chip_Packet_Price]
+
+
+#### Running a t test to verify statistical significance
+t.test(mainstream, premium_Budget, alternative = "greater")
+
+```
+
+
+
+The t-test results in a p-value of 2.22e-16, i.e. the unit price for mainstream, young and mid-age singles and couples [ARE / ARE NOT] significantly higher than that of budget or premium, young and midage singles and couples.
+
+
+## Deep dive into specific customer segments for insights
+We have found quite a few interesting insights that we can dive deeper into. We might want to target customer segments that contribute the most to sales to retain them or further increase sales. Let's look at Mainstream - young singles/couples. For instance, let's find out if they tend to buy a particular brand of chips.
+
+
+```{r fig.align = "center"}
+
+#### Deep dive into Mainstream, young singles/couples
+
+mainstream_Brands = data [LIFESTAGE == 'YOUNG SINGLES/COUPLES' & PREMIUM_CUSTOMER == 'Mainstream'] [, .N, BRAND][order (N, decreasing = T)]
+old_Families_Brands = data [LIFESTAGE == 'OLDER FAMILIES' & PREMIUM_CUSTOMER == 'Budget'] [, .N, BRAND][order (N, decreasing = T)]
+
+print(mainstream_Brands)
+print(old_Families_Brands)
+
+```
+
+
+We can see that both share Kettle as their number 1 brand. If the client would like to target these segments then the Kettle brand would be ideal. Performing an affinity analysis. 
+
+
+```{r}
+
+#### Performing an Affinity Analysis
+
+sector = data [LIFESTAGE == "YOUNG SINGLES/COUPLES" & PREMIUM_CUSTOMER == "Mainstream", ]
+other = data [!(LIFESTAGE == "YOUNG SINGLES/COUPLES" & PREMIUM_CUSTOMER == "Mainstream"), ]
+
+quantity_sector = sector [, sum(PROD_QTY)]
+quantity_other = other [, sum(PROD_QTY)]
+
+quantity_sector_Brand = sector [, .(targetSector = sum(PROD_QTY)/quantity_sector), by = BRAND]
+quantity_other_Brand = other [, .(other = sum(PROD_QTY)/quantity_other), by = BRAND]
+
+print (quantity_sector)
+print (quantity_sector_Brand)
+
+brand_proportions = merge (quantity_sector_Brand, quantity_other_Brand) [, affinityToBrand := targetSector/other]
+brand_proportions[order(-affinityToBrand)]
+
+
+```
+
+
+The affinity analysis takes into account the affinity of the target sectors for certain brands with respect to all the other sectors. From the analysis we can see that the mainstream young singles/couples are purchasing approximately 22.8% more Tyrell chips compared to the rest of the population. The analysis is in descending order and shows the purchasing differences between the mainstream young singles/couples and the other sectors. At the end, you can see that the Burger chips are not being purchased by the young singles/couples compared to the other sectors. 
+
+
+
+Let's also find out if our target segment tends to buy larger packs of chips.
+
+```{r fig.align = "center"}
+
+#### Preferred pack size compared to the rest of the population
+
+mainstream_Packs = data [LIFESTAGE == 'YOUNG SINGLES/COUPLES' & PREMIUM_CUSTOMER == 'Mainstream'] [, .N, PACK_SIZE][order (N, decreasing = T)]
+old_Families_Packs = data [LIFESTAGE == 'OLDER FAMILIES' & PREMIUM_CUSTOMER == 'Budget'] [, .N, PACK_SIZE][order (N, decreasing = T)]
+
+print(mainstream_Packs)
+print(old_Families_Packs)
+
+quantity_sector_Pack = sector [, .(targetSector = sum(PROD_QTY)/quantity_sector), by = PACK_SIZE]
+quantity_other_Pack = other [, .(other = sum(PROD_QTY)/quantity_other), by = PACK_SIZE]
+
+print (quantity_sector_Pack)
+print (quantity_sector_Brand)
+
+pack_proportions = merge (quantity_sector_Pack, quantity_other_Pack) [, affinityToPack := targetSector/other]
+pack_proportions[order(-affinityToPack)]
+
+
+```
+
+
+## Findings: 
+
+It was determined that the 2018-12-25 date was missing in the data. Since it was Christmas Day, it is assumed that it was closed. Sales increased int he days before Christmas. 
+
+Majority of the sales resulted from the Budget - older families, Mainstream - young singles/couples and Mainstream - retiree shoppers. 
+
+Mainstream, mid-age and young singles and couples are also more likely to pay more per packet of chips compared to other premium customers in their category. 
+
+Mainstream young singles and couples are 23% more likely to purchase Tyrrells chips compared to the rest of the population. It is suggested to increase the increase the category’s performance by off-locating some Tyrrells and smaller packs of chips in discretionary space near segments
+where young singles and couples frequent more often to increase visibility and impulse behaviour.
+
+
