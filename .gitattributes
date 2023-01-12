@@ -11,7 +11,7 @@
 *.R  	  text
 *.Rproj text
 
-*.[Rr]md linguist-detectable = true
+*.[Rr]md linguist-detectable=true
 *.java linguist-detectable=false  
 *.js linguist-detectable=false  
 *.html linguist-detectable=false  
