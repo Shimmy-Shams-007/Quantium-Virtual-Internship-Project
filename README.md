@@ -1,9 +1,22 @@
 # Quantium Virtual Experience Program in Data Analytics
 
-- This is program consists of 3 tasks 
-- All these code files were my personal submissions for this program. Except the data files which were assigned by Quantium.
+This project consists of 3 tasks.
+
++ Task 1: Data preparation and customer analytics
+
+Analyze client's transaction dataset and identify customer purchasing behaviors to generate insights and provide commercial recommendations.
+
++ Task 2: Experimentation and uplift testing
+
+Extend your analysis from Task 1 to help you identify benchmark stores that allow you to test the trial store layouts' impact on customer sales.
+
++ Task 3: Analytics and commercial application
+
+Use analytics and insights from Task 1 and 2 to prepare a report for your client, the Category Manager.
 
 ---
+
+# Detailed Explanation of the Tasks and the Steps Taken to Solve Them
 
 ### Task 1 - Data preparation and Customer Analytics
 Conduct analysis on your client's transaction dataset and identify customer purchasing behaviours to generate insights and provide commercial recommendations.
